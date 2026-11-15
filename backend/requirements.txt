@@ -1,0 +1,8 @@
+flask
+flask-cors
+gunicorn
+numpy
+astropy
+reproject
+pyvo
+requests
