@@ -1,6 +1,6 @@
 /* DATA LAYER: object classes, simulated spectra, targets, catalog generator, and live NASA SPHEREx DR1 loader. */
 
-const BACKEND_URL = 'http://127.0.0.1:5000';
+const BACKEND_URL = 'https://spherex-ay0e.onrender.com';
 
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => [...document.querySelectorAll(s)];
