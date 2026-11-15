@@ -127,7 +127,22 @@ function render(e, lam, ch) {
 
   /* Use real reprojected NASA SPHEREx DR1 pixels when loaded */
   if (S.T.realEpochs && S.T.realEpochs.length) {
-    const ep = S.T.realEpochs[e % S.T.realEpochs.length];
+    let ep = S.T.realEpochs[e % S.T.realEpochs.length];
+
+    /* Check if this epoch actually has non-zero pixel data; if blank, fall back to the first valid NASA frame */
+    const hasSignal =
+      ep &&
+      ep.pixels &&
+      ep.pixels.length === N * N &&
+      ep.pixels.some((v) => v > 0);
+
+    if (!hasSignal) {
+      ep =
+        S.T.realEpochs.find(
+          (cand) => cand && cand.pixels && cand.pixels.some((v) => v > 0)
+        ) || ep;
+    }
+
     const base = ep.pixels;
     img = new Float32Array(N * N);
 
@@ -141,58 +156,60 @@ function render(e, lam, ch) {
     if (ch === 3) bandScale *= 0.88;
 
     for (let i = 0; i < N * N; i++) {
-      img[i] = base[i] * bandScale;
+      const val = Number.isFinite(base[i]) ? base[i] : 0;
+      img[i] = val * bandScale;
     }
 
     frameCache.set(key, img);
     return img;
   }
+}
 
-  /* Fallback procedural simulation */
-  const nz = noiseFor(e, ch);
-  const lv = noiseLevel(lam);
-  img = new Float32Array(N * N);
+/* Fallback procedural simulation */
+const nz = noiseFor(e, ch);
+const lv = noiseLevel(lam);
+img = new Float32Array(N * N);
 
-  for (let i = 0; i < img.length; i++) {
-    img[i] = nz[i] * lv;
-  }
+for (let i = 0; i < img.length; i++) {
+  img[i] = nz[i] * lv;
+}
 
-  const sc = (S.fov * 60) / N;
-  const sig = Math.max(1, 2.7 / sc);
+const sc = (S.fov * 60) / N;
+const sig = Math.max(1, 2.7 / sc);
 
-  for (const s of S.T.srcs) {
-    let a = fluxAt(s, e, lam);
-    if (!matches(s, e)) a *= 0.12;
+for (const s of S.T.srcs) {
+  let a = fluxAt(s, e, lam);
+  if (!matches(s, e)) a *= 0.12;
 
-    const ext = s.ext || 1;
-    if (ext > 1) a /= ext * 0.8;
-    if (a < 0.0006) continue;
+  const ext = s.ext || 1;
+  if (ext > 1) a /= ext * 0.8;
+  if (a < 0.0006) continue;
 
-    const sg = sig * ext;
-    const [p, q] = pos(s, e);
-    const x = N / 2 - p / sc;
-    const y = N / 2 - q / sc;
-    const rad = Math.ceil(4 * sg);
+  const sg = sig * ext;
+  const [p, q] = pos(s, e);
+  const x = N / 2 - p / sc;
+  const y = N / 2 - q / sc;
+  const rad = Math.ceil(4 * sg);
 
-    if (x < -rad || x > N + rad || y < -rad || y > N + rad) continue;
+  if (x < -rad || x > N + rad || y < -rad || y > N + rad) continue;
 
-    const x0 = Math.max(0, Math.floor(x - rad));
-    const x1 = Math.min(N - 1, Math.ceil(x + rad));
-    const y0 = Math.max(0, Math.floor(y - rad));
-    const y1 = Math.min(N - 1, Math.ceil(y + rad));
-    const k = 1 / (2 * sg * sg);
+  const x0 = Math.max(0, Math.floor(x - rad));
+  const x1 = Math.min(N - 1, Math.ceil(x + rad));
+  const y0 = Math.max(0, Math.floor(y - rad));
+  const y1 = Math.min(N - 1, Math.ceil(y + rad));
+  const k = 1 / (2 * sg * sg);
 
-    for (let j = y0; j <= y1; j++) {
-      for (let i = x0; i <= x1; i++) {
-        const dx = i + 0.5 - x;
-        const dy = j + 0.5 - y;
-        img[j * N + i] += a * Math.exp(-(dx * dx + dy * dy) * k);
-      }
+  for (let j = y0; j <= y1; j++) {
+    for (let i = x0; i <= x1; i++) {
+      const dx = i + 0.5 - x;
+      const dy = j + 0.5 - y;
+      img[j * N + i] += a * Math.exp(-(dx * dx + dy * dy) * k);
     }
   }
+}
 
-  frameCache.set(key, img);
-  return img;
+frameCache.set(key, img);
+return img;
 }
 
 const COLOR_LAMS = [4.7, 2.9, 1.25];
